@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>NAMI & LEO</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700&display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:'Cinzel', serif;background:#000000;color:white;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;overflow:hidden;}
+.title{font-size:3rem;margin-bottom:40px;text-shadow:0 0 20px red;}
+.cards{display:flex;gap:50px;}
+.player-btn{width:280px;height:380px;border:2px solid red;border-radius:10px;position:relative;overflow:hidden;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:0.3s;}
+.player-btn:hover{transform:scale(1.05);box-shadow:0 0 40px red;}
+.player-btn img{width:120px;height:120px;border-radius:50%;border:3px solid white;object-fit:cover;}
+.player-btn .name{margin-top:10px;}
+.player-btn .status{margin-top:5px;}
+.online{color:#43b581;} .idle{color:#faa61a;} .dnd{color:#f04747;} .offline{color:#747f8d;}
+
+.profile-modal{position:fixed;inset:0;background:rgba(0, 0, 0, 0.95);display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:0.4s;}
+.profile-modal.active{opacity:1;pointer-events:auto;}
+.profile-content{width:500px;height:700px;border-radius:20px;background:#111;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;overflow:hidden;animation:scaleIn 0.4s ease;}
+@keyframes scaleIn{from{transform:scale(0.8);}to{transform:scale(1);}}
+.profile-content img.banner{width:100%;height:180px;object-fit:cover;}
+.profile-content img.avatar-big{width:180px;height:180px;border-radius:50%;margin-top:20px;margin-bottom:15px;}
+.profile-content h2,p{margin:5px;}
+.activities{margin-top:10px;}
+</style>
+</head>
+<body>
+
+<h1 class="title"> 𝓛𝓔𝓞 & 𝓝𝓐𝓜𝓘</h1>
+<div class="cards">
+  <div class="player-btn" id="player1-btn" data-bg="https://media0.giphy.com/media/v1.Y2lkPTc5MGI3NjExdGFmbzk4ZXMybHk4cjI2cGZ1MnozdDJzaGhuMzYxN3EzOXZ0aW5xeSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/TXSxuSHx9i6TNeBSry/giphy.gif">
+    <img id="avatar1" src="">
+    <div class="name" id="name1">Loading...</div>
+    <div class="status" id="status1">Loading...</div>
+  </div>
+  <div class="player-btn" id="player2-btn" data-bg="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExMHh3NnNuNzZkZWZpenNpMG0yaHJseHIxdjQya3YwOW1jcTc4YmdwbSZlcD12MV9naWZzX3NlYXJjaCZjdD1n/4tGqmyXp3jD01wZG1r/giphy.gif">
+    <img id="avatar2" src="">
+    <div class="name" id="name2">Loading...</div>
+    <div class="status" id="status2">Connecting...</div>
+  </div>
+</div>
+
+<div class="profile-modal" id="modal" onclick="closeProfile()">
+  <div class="profile-content" id="modalContent" onclick="event.stopPropagation()">
+    <img id="modalBanner" class="banner">
+    <img id="modalAvatar" class="avatar-big">
+    <h2 id="modalName"></h2>
+    <p id="modalStatus"></p>
+    <p id="modalCustom"></p>
+    <div class="activities" id="modalActivity"></div>
+  </div>
+</div>
+
+<!-- Music -->
+<audio id="music1" loop>
+  <source src="leonami/music1.mp3" type="audio/mp3">
+</audio>
+<audio id="music2" loop>
+  <source src="leonami/music2.mp3" type="audio/mp3">
+</audio>
+
+<script>
+// Discord IDs
+const PLAYER_1_ID = "1273936689147936810";
+const PLAYER_2_ID = "1441106473965981727";
+const music1 = document.getElementById("music1");
+const music2 = document.getElementById("music2");
+
+// Apply custom backgrounds to player cards
+document.querySelectorAll('.player-btn').forEach(btn=>{
+  const bg = btn.dataset.bg;
+  btn.style.background = `url(${bg}) center/cover no-repeat`;
+});
+
+// Load Player 1 (REST)
+async function loadPlayer1(){
+  try{
+    const res = await fetch(`https://api.lanyard.rest/v1/users/1273936689147936810`);
+    const data = await res.json();
+    const user = data.data.discord_user;
+    const avatarUrl = user.avatar ? `https://cdn.discordapp.com/avatars/1273936689147936810/${user.avatar}.png?size=256` : `https://cdn.discordapp.com/embed/avatars/${user.discriminator % 5}.png`;
+    document.getElementById("avatar1").src = avatarUrl;
+    document.getElementById("name1").innerText = `${user.username}#${user.discriminator}`;
+    const statusEl = document.getElementById("status1");
+    statusEl.innerText = data.data.discord_status.toUpperCase();
+    statusEl.className = "status " + data.data.discord_status;
+    document.getElementById("avatar1").dataset.banner = user.banner ? `https://cdn.discordapp.com/banners/1273936689147936810/${user.banner}.png?size=512` : '';
+    document.getElementById("avatar1").dataset.custom = data.data.activities && data.data.activities[0]?.state || '';
+    document.getElementById("avatar1").dataset.activities = JSON.stringify(data.data.activities || []);
+  }catch(e){console.log("Error player1",e);}
+}
+loadPlayer1();
+setInterval(loadPlayer1,15000);
+
+// Load Player 2 (WebSocket)
+function connectPlayer2(){
+  const socket = new WebSocket("wss://api.lanyard.rest/socket");
+  socket.onopen = ()=>{ socket.send(JSON.stringify({op:2,d:{subscribe_to_id:PLAYER_2_ID}})); };
+  socket.onmessage = evt=>{
+    const payload = JSON.parse(evt.data);
+    if(payload.t==="INIT_STATE" || payload.t==="PRESENCE_UPDATE"){
+      const user = payload.d.discord_user;
+      const avatarUrl = user.avatar ? `https://cdn.discordapp.com/avatars/1441106473965981727/${user.avatar}.png?size=256` : `https://cdn.discordapp.com/embed/avatars/${user.discriminator % 5}.png`;
+      document.getElementById("avatar2").src = avatarUrl;
+      document.getElementById("name2").innerText = `${user.username}#${user.discriminator}`;
+      const statusEl = document.getElementById("status2");
+      statusEl.innerText = payload.d.discord_status.toUpperCase();
+      statusEl.className = "status " + payload.d.discord_status;
+      document.getElementById("avatar2").dataset.banner = user.banner ? `https://cdn.discordapp.com/banners/1441106473965981727/${user.banner}.png?size=512` : '';
+      document.getElementById("avatar2").dataset.custom = payload.d.activities && payload.d.activities[0]?.state || '';
+      document.getElementById("avatar2").dataset.activities = JSON.stringify(payload.d.activities || []);
+    }
+  };
+}
+connectPlayer2();
+
+// Open profile modal
+const modalBgUrls = {
+  1: "https://media2.giphy.com/media/v1.Y2lkPTc5MGI3NjExa2J3ODdndXh5d3d5azh3dnQ1Ym1ueHZxZW0zdjF1Z2ttYXZ5ZjJodCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/xT9IgzoKnwFNmISR8I/giphy.gif",
+  2: "https://media4.giphy.com/media/v1.Y2lkPTc5MGI3NjExZDdkdDl1Mml4cXg4NHcxMXRzZ3lodjBteXVnc2kyd2VwYzhidXFmZSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/IMOTcqOtaEkXiBonLU/giphy.gif"
+};
+
+function openProfile(player){
+  const avatarEl = document.getElementById(`avatar${player}`);
+  const avatar = avatarEl.src;
+  const name = document.getElementById(`name${player}`).innerText;
+  const status = document.getElementById(`status${player}`).innerText;
+  const banner = avatarEl.dataset.banner || '';
+  const custom = avatarEl.dataset.custom || '';
+  const activities = JSON.parse(avatarEl.dataset.activities || []);
+
+  const modalContent = document.getElementById("modalContent");
+  modalContent.style.background = `url(${modalBgUrls[player]}) center/cover no-repeat`;
+
+  document.getElementById("modalAvatar").src = avatar;
+  document.getElementById("modalName").innerText = name;
+  document.getElementById("modalStatus").innerText = status;
+  document.getElementById("modalBanner").src = banner;
+  document.getElementById("modalCustom").innerText = custom;
+  const activityDiv = document.getElementById("modalActivity");
+  activityDiv.innerHTML = '';
+  activities.forEach(act=>{
+    if(act.name) activityDiv.innerHTML += `<p>${act.type===0?'Playing':'Activity'}: ${act.name} ${act.state||''}</p>`;
+  });
+
+  document.getElementById("modal").classList.add("active");
+
+  // Play music for clicked player
+  if (player === 1) {
+    music2.pause();
+    music2.currentTime = 0;
+    music1.play().catch(() => {});
+  } else {
+    music1.pause();
+    music1.currentTime = 0;
+    music2.play().catch(() => {});
+  }
+}
+document.getElementById("player1-btn").addEventListener("click",()=>openProfile(1));
+document.getElementById("player2-btn").addEventListener("click",()=>openProfile(2));
+function closeProfile(){document.getElementById("modal").classList.remove("active");}
+</script>
+</body>
+</html>
